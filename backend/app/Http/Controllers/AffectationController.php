@@ -22,7 +22,7 @@ class AffectationController extends Controller
             'formateur', 
             'module', 
             'groupe.filiere'
-        ])->latest()->get();
+        ])->withCount(['presences', 'notes'])->latest()->get();
         
         return response()->json([
             'status' => 'success',
@@ -73,6 +73,68 @@ class AffectationController extends Controller
             'message' => 'Affectation créée avec succès.',
             'data' => $affectation
         ], 201);
+    }
+
+    /**
+     * Modifier une affectation existante
+     */
+    public function update(Request $request, $id)
+    {
+        $affectation = Affectation::find($id);
+
+        if (!$affectation) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Affectation introuvable.'
+            ], 404);
+        }
+
+        // Bloquer la modification si des présences ou notes existent déjà
+        if ($affectation->presences()->count() > 0 || $affectation->notes()->count() > 0) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Impossible de modifier cette affectation car elle contient déjà des présences ou des notes enregistrées.'
+            ], 409);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'idAnneeScolaire' => 'required|exists:annees_scolaires,idAnneeScolaire',
+            'idFormateur'     => 'required|exists:formateurs,idFormateur',
+            'idModule'        => 'required|exists:modules,idModule',
+            'idGroupe'        => 'required|exists:groupes,idGroupe',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Erreur de validation des données.',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        // Vérifier si la nouvelle combinaison crée un doublon (autre que l'affectation actuelle)
+        $duplicate = Affectation::where('idAnneeScolaire', $request->idAnneeScolaire)
+            ->where('idFormateur', $request->idFormateur)
+            ->where('idModule',    $request->idModule)
+            ->where('idGroupe',    $request->idGroupe)
+            ->where('idAffectation', '!=', $id)
+            ->exists();
+
+        if ($duplicate) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Une affectation identique existe déjà.'
+            ], 409);
+        }
+
+        $affectation->update($request->only(['idAnneeScolaire', 'idFormateur', 'idModule', 'idGroupe']));
+        $affectation->load(['anneeScolaire', 'formateur', 'module', 'groupe.filiere']);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Affectation modifiée avec succès.',
+            'data'    => $affectation
+        ], 200);
     }
 
     /**

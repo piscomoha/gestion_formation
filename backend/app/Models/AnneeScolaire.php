@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 
 class AnneeScolaire extends Model {
+    protected $table = 'annees_scolaires';
     protected $primaryKey = 'idAnneeScolaire';
     protected $fillable = ['libelle', 'dateDebut', 'dateFin'];
     
